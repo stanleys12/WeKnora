@@ -13,7 +13,7 @@ func TestDecodeDataURIBytes_Valid(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString(raw)
 	dataURI := "data:image/jpeg;base64," + encoded
 
-	decoded, err := decodeDataURIBytes(dataURI)
+	decoded, err := DecodeDataURIBytes(dataURI)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestDecodeDataURIBytes_NoPaddingFallback(t *testing.T) {
 	encoded := base64.RawStdEncoding.EncodeToString(raw)
 	dataURI := "data:image/png;base64," + encoded
 
-	decoded, err := decodeDataURIBytes(dataURI)
+	decoded, err := DecodeDataURIBytes(dataURI)
 	if err != nil {
 		t.Fatalf("unexpected error with padding fallback: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestDecodeDataURIBytes_NoPaddingFallback(t *testing.T) {
 }
 
 func TestDecodeDataURIBytes_NoDataPrefix(t *testing.T) {
-	_, err := decodeDataURIBytes("image/png;base64,AAAA")
+	_, err := DecodeDataURIBytes("image/png;base64,AAAA")
 	if err == nil {
 		t.Fatal("expected error for missing data: prefix")
 	}
@@ -48,7 +48,7 @@ func TestDecodeDataURIBytes_NoDataPrefix(t *testing.T) {
 }
 
 func TestDecodeDataURIBytes_NoBase64Marker(t *testing.T) {
-	_, err := decodeDataURIBytes("data:image/png,rawdata")
+	_, err := DecodeDataURIBytes("data:image/png,rawdata")
 	if err == nil {
 		t.Fatal("expected error for missing ;base64, marker")
 	}
@@ -58,7 +58,7 @@ func TestDecodeDataURIBytes_NoBase64Marker(t *testing.T) {
 }
 
 func TestDecodeDataURIBytes_EmptyBase64(t *testing.T) {
-	decoded, err := decodeDataURIBytes("data:image/png;base64,")
+	decoded, err := DecodeDataURIBytes("data:image/png;base64,")
 	if err != nil {
 		t.Fatalf("unexpected error for empty base64: %v", err)
 	}

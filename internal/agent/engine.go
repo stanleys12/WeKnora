@@ -1083,7 +1083,7 @@ func (e *AgentEngine) describeImages(ctx context.Context, imageDataURIs []string
 			logger.Warnf(ctx, "[Agent] Context cancelled, skipping remaining %d tool result images", len(imageDataURIs)-i)
 			break
 		}
-		imgBytes, err := decodeDataURIBytes(dataURI)
+		imgBytes, err := DecodeDataURIBytes(dataURI)
 		if err != nil {
 			logger.Warnf(ctx, "[Agent] Failed to decode tool result image %d: %v", i, err)
 			continue
@@ -1100,10 +1100,10 @@ func (e *AgentEngine) describeImages(ctx context.Context, imageDataURIs []string
 	return descriptions
 }
 
-// decodeDataURIBytes extracts raw bytes from a "data:mime;base64,..." URI.
+// DecodeDataURIBytes extracts raw bytes from a "data:mime;base64,..." URI.
 // Retries with RawStdEncoding when standard base64 decoding fails (some MCP
 // servers omit trailing '=' padding).
-func decodeDataURIBytes(dataURI string) ([]byte, error) {
+func DecodeDataURIBytes(dataURI string) ([]byte, error) {
 	if !strings.HasPrefix(dataURI, "data:") {
 		return nil, fmt.Errorf("not a data URI")
 	}

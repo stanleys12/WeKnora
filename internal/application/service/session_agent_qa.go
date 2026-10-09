@@ -266,15 +266,7 @@ func (s *sessionService) AgentQA(
 		engine.SetContextCheckpointSink(messageCheckpointSink{repo: s.messageRepo, sessionID: sessionID})
 	}
 
-	agentQuery := req.Query
-	var agentImageURLs []string
-	if agentModelSupportsVision && len(req.ImageURLs) > 0 {
-		agentImageURLs = req.ImageURLs
-		logger.Infof(ctx, "Agent model supports vision, passing %d image(s) directly", len(agentImageURLs))
-	} else if req.ImageDescription != "" {
-		agentQuery = req.Query + "\n\n[用户上传图片内容]\n" + req.ImageDescription
-		logger.Infof(ctx, "Agent model does not support vision, appending image description (%d chars)", len(req.ImageDescription))
-	}
+	agentQuery, agentImageURLs := s.agentQueryWithImages(ctx, req, agentModelSupportsVision, agentConfig.VLMModelID)
 	if req.QuotedContext != "" {
 		agentQuery += "\n\n" + req.QuotedContext
 	}
@@ -312,6 +304,71 @@ func (s *sessionService) AgentQA(
 	}
 	// Return empty - events will be handled by Handler via EventBus subscription
 	return nil
+}
+
+// maxAgentImageAnalysisCount matches the web handler limit on images per message.
+const maxAgentImageAnalysisCount = 5
+
+func (s *sessionService) agentQueryWithImages(
+	ctx context.Context,
+	req *types.QARequest,
+	modelSupportsVision bool,
+	vlmModelID string,
+) (string, []string) {
+	if modelSupportsVision && len(req.ImageURLs) > 0 {
+		logger.Infof(ctx, "Agent model supports vision, passing %d image(s) directly", len(req.ImageURLs))
+		return req.Query, req.ImageURLs
+	}
+	imageDescription := s.agentImageDescription(ctx, req, vlmModelID)
+	if imageDescription == "" {
+		return req.Query, nil
+	}
+	logger.Infof(ctx, "Agent model does not support vision, appending image description (%d chars)", len(imageDescription))
+	return req.Query + "\n\n[用户上传图片内容]\n" + imageDescription, nil
+}
+
+// agentImageDescription describes data URI images with the agent's VLM when the
+// caller (IM channels) did not supply a description. Web requests carry storage
+// URLs and get their description from the handler.
+func (s *sessionService) agentImageDescription(ctx context.Context, req *types.QARequest, vlmModelID string) string {
+	if req.ImageDescription != "" || vlmModelID == "" {
+		return req.ImageDescription
+	}
+	var dataURIs []string
+	for _, imageURL := range req.ImageURLs {
+		if strings.HasPrefix(imageURL, "data:") && len(dataURIs) < maxAgentImageAnalysisCount {
+			dataURIs = append(dataURIs, imageURL)
+		}
+	}
+	if len(dataURIs) == 0 {
+		return ""
+	}
+	vlmModel, err := s.modelService.GetVLMModel(ctx, vlmModelID)
+	if err != nil {
+		logger.Warnf(ctx, "Failed to load VLM model %s for user image analysis: %v", vlmModelID, err)
+		return ""
+	}
+	prompt := secutils.BuildImageAnalysisPrompt(req.Query)
+	var descriptions []string
+	for i, dataURI := range dataURIs {
+		if ctx.Err() != nil {
+			break
+		}
+		imgBytes, err := agent.DecodeDataURIBytes(dataURI)
+		if err != nil {
+			logger.Warnf(ctx, "Failed to decode image %d for VLM analysis: %v", i, err)
+			continue
+		}
+		desc, err := vlmModel.Predict(ctx, [][]byte{imgBytes}, prompt)
+		if err != nil {
+			logger.Warnf(ctx, "VLM analysis failed for image %d: %v", i, err)
+			continue
+		}
+		if desc = strings.TrimSpace(desc); desc != "" {
+			descriptions = append(descriptions, desc)
+		}
+	}
+	return strings.Join(descriptions, "\n\n")
 }
 
 // buildAgentConfig creates a runtime AgentConfig from the QARequest's custom agent configuration,

@@ -51,6 +51,7 @@ type stubModelService struct {
 	chatModel       chat.Chat
 	modelsByID      map[string]*types.Model
 	availableModels []*types.Model
+	vlmModel        vlm.VLM
 }
 
 func TestEmitKnowledgeReferencesEventIgnoresCitationOutputSetting(t *testing.T) {
@@ -132,7 +133,7 @@ func (s *stubModelService) GetChatModel(context.Context, string) (chat.Chat, err
 }
 
 func (s *stubModelService) GetVLMModel(context.Context, string) (vlm.VLM, error) {
-	return nil, nil
+	return s.vlmModel, nil
 }
 
 func (s *stubModelService) GetASRModel(context.Context, string) (asr.ASR, error) {
